@@ -9,6 +9,7 @@
 #   Rscript SCRIPTS/08_plot_ZDL_perregion_fullensemble_eobs.R
 
 ROOT <- "/mnt/CORDEX_CMIP6_tmp/user_tmp/skotlarski/eurocordex_zerodegline"
+source(file.path(ROOT, "SCRIPTS", "08_10_model_colours.R"))
 ZDL_DIR <- file.path(ROOT, "RESULTS", "ZDL")
 EOBS_DIR <- file.path(ROOT, "RESULTS", "ZDL_EOBS")
 PLOT_DIR <- file.path(ROOT, "PLOTS", "ZDL")
@@ -45,28 +46,7 @@ for (f in list.files(EOBS_DIR, pattern = "_(DJF|MAM|JJA|SON)_ZDL\\.csv$", full.n
 
 all_models <- sort(unique(unlist(lapply(zdl, function(r) lapply(r, function(d) d$model)))))
 
-# Model family: variants of the same model share a hue, members differ in lightness.
-family_of <- function(model) {
-  if (grepl("REMO", model)) return("REMO")
-  if (grepl("WRF451Q", model)) return("WRF451Q")
-  if (grepl("ICON-CLM", model)) return("ICON-CLM")
-  if (grepl("CCLM6", model)) return("CCLM6")
-  if (grepl("ALADIN|ALARO", model)) return("ALADIN")
-  model
-}
-
-fam <- vapply(all_models, family_of, "")
-fam_levels <- sort(unique(fam))
-fam_hue <- setNames(seq(0, 360, length.out = length(fam_levels) + 1)[seq_along(fam_levels)], fam_levels)
-
-model_col <- character(length(all_models))
-names(model_col) <- all_models
-for (f_name in fam_levels) {
-  members <- all_models[fam == f_name]
-  n <- length(members)
-  lightness <- if (n == 1) 55 else seq(35, 80, length.out = n)
-  model_col[members] <- hcl(h = fam_hue[[f_name]], c = 70, l = lightness)
-}
+model_col <- model_colours(all_models)
 
 for (region in regions) {
   label <- gsub("_", " ", region)

@@ -149,3 +149,32 @@ Rscript SCRIPTS/08_plot_ZDL_perregion_fullensemble_eobs.R
 Output: `PLOTS/ZDL/ZDL_overview_<Region>.png`, one figure per region (12 files). Each has four panels (DJF, MAM, JJA, SON) placed side by side in one row, with a common y-axis (ZDL in m) shared by all panels of a region and no x-axis. Every model is a horizontal line at its ZDL; missing ZDL values are skipped. The E-OBS ZDL is a black line in each panel where it is available (legend entry "E-OBS"). The legend sits below the panels.
 
 Colours are fixed per model across all regions. Variants of the same model family share a hue and differ in lightness (families: REMO2020, WRF451Q, CCLM6, ICON-CLM, ALADIN/ALARO; other models have their own hue). The legend below the panels lists all models.
+
+### `SCRIPTS/09a_compute_ZDL_timeseries_seasonal_indivmodels.R`
+Computes an annual seasonal ZDL for each model and region from 1981 to 2020, using the same regional masks, land-fraction threshold, regression and no-extrapolation rule as script 07a. At least three finite temperature/elevation pairs are required. Heights are rounded to whole metres; invalid fits are `NA`.
+
+```bash
+/home/skotlarski/.conda/envs/zdl-r/bin/Rscript SCRIPTS/09a_compute_ZDL_timeseries_seasonal_indivmodels.R
+```
+
+Inputs are the EUR-12 seasonal time series from scripts 02–03, together with the model orography, land fractions and EEA masks used by script 07a. As in script 07a, DJF uses only the 1982–2019 seasonal series produced by script 02; the 1981 and 2020 columns are `NA`. DJF is labelled by the January year. CDO is used to read the time axes according to their calendars.
+
+Output: `RESULTS/ZDL/<Region>_<SEASON>_ZDL_timeseries.csv`, one tab-separated file per region and season. The header contains `MODEL` followed by 1981 through 2020, the second line contains `=` characters matching the header's character count, and each subsequent row contains one model's ZDL series. These filenames do not overwrite or match the climatology tables consumed by script 08.
+
+### `SCRIPTS/09b_compute_ZDL_timeseries_seasonal_eobs.R`
+Computes the equivalent annual seasonal E-OBS ZDL series, using the E-OBS seasonal time series and orography from script 06 and the EEA masks. As in script 07b, cells must have a region mask of 1 and finite temperature and orography; there is no land-fraction threshold. The regression, minimum number of cells, rounding, and DJF 1982–2019 window are the same as in script 09a.
+
+```bash
+/home/skotlarski/.conda/envs/zdl-r/bin/Rscript SCRIPTS/09b_compute_ZDL_timeseries_seasonal_eobs.R
+```
+
+Output: `RESULTS/ZDL_EOBS/<Region>_<SEASON>_ZDL_timeseries.csv`, in the same format as script 09a with one row labelled `EOBS_v31.0e`. DJF 1981 and 2020 are `NA`. Scripts 09a and 09b use the shared helpers in `SCRIPTS/09_zdl_timeseries_helpers.R`.
+
+### `SCRIPTS/10_plot_ZDL_timeseries_perregion_fullensemble_eobs.R`
+Plots the annual seasonal ZDL series from scripts 09a and 09b. Run with base R:
+
+```bash
+Rscript SCRIPTS/10_plot_ZDL_timeseries_perregion_fullensemble_eobs.R
+```
+
+Output: `PLOTS/ZDL/ZDL_timeseries_<Region>.png`, one figure per region with DJF, MAM, JJA and SON panels, a common ZDL height axis and a model legend. Each model has a line and small circular markers at available annual values; missing values break the line. E-OBS is shown in black with a dashed line and markers. Colours match script 08 via the shared `SCRIPTS/08_10_model_colours.R` helper. The script requires a model and E-OBS table for every region and season and checks the year columns and model names.
