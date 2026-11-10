@@ -34,11 +34,19 @@ read_tas_step <- function(nc, step) {
   x
 }
 
+# ZDL is NA if b >= 0 or fewer than 3 values. Extrapolated ZDLs (outside the orography range of the cells)
+# keep their height and are flagged with extrap = TRUE; they are written with a trailing "*".
 fit_zdl <- function(tas, orog) {
-  if (length(tas) < 3) return(NA_real_)
+  if (length(tas) < 3) return(list(z0 = NA_real_, extrap = FALSE))
   fit <- lm(tas ~ orog)
   a <- unname(coef(fit)[1])
   b <- unname(coef(fit)[2])
   z0 <- if (!is.na(b) && b < 0) -a / b else NA_real_
-  if (is.finite(z0) && z0 >= min(orog) && z0 <= max(orog)) z0 else NA_real_
+  extrap <- is.finite(z0) && (z0 < min(orog) || z0 > max(orog))
+  list(z0 = z0, extrap = extrap)
+}
+
+format_zdl <- function(fit) {
+  if (!is.finite(fit$z0)) return("NA")
+  paste0(sprintf("%.0f", fit$z0), if (fit$extrap) "*" else "")
 }

@@ -107,14 +107,14 @@ Inputs:
 Method per model, region and season:
 - Grid cells are used if the region mask equals 1, orography is finite, and the land fraction is greater than 0.5.
 - Linear regression `tas ~ orog`.
-- ZDL = elevation where the fit equals 0 °C, i.e. −a/b. It is reported only if the slope b is negative and the elevation lies within the orography range of the selected cells. Otherwise it is NA (pure extrapolation is treated as missing).
+- ZDL = elevation where the fit equals 0 °C, i.e. −a/b. It is reported only if the slope b is negative; otherwise it is NA. If the elevation lies outside the orography range of the selected cells, it is an extrapolation: the height is still reported but flagged with a trailing `*` in the tables.
 
 Output: `PLOTS/ZDL/<INST>_<MODEL>_<Region>_ZDL.png`, one figure per model and region (252 files = 21 models × 12 regions). Each figure has four panels (DJF, MAM, JJA, SON) showing tas (°C, x-axis) against orography (m, y-axis), the fitted line, the ZDL (blue dashed line with its elevation), a dotted 0 °C reference, and n and R² in the title. A summary line per model and region is printed to stdout.
 
-Tables: `RESULTS/ZDL/<Region>_<SEASON>_ZDL.csv` (48 files = 12 regions × 4 seasons). Each is tab-separated with the header `MODEL<TAB>ZDL`, a line of `========`, then one row per model, where MODEL is `<INST>_<MODEL>` and ZDL is the zero-degree elevation in m (rounded), or `NA` if missing.
+Tables: `RESULTS/ZDL/<Region>_<SEASON>_ZDL.csv` (48 files = 12 regions × 4 seasons). Each is tab-separated with the header `MODEL<TAB>ZDL`, a line of `========`, then one row per model, where MODEL is `<INST>_<MODEL>` and ZDL is the zero-degree elevation in m (rounded), or `NA` if missing. An extrapolated ZDL (outside the orography range of the selected cells) is written with a trailing `*`, e.g. `2750*`.
 
 Caveats:
-- A ZDL outside the elevation range of the selected cells is an extrapolation and is set to missing; the panel then shows "ZDL outside data range (missing)". Many JJA and some DJF/MAM values are missing for this reason, especially in the Iberian mountains, Scandes and Iceland.
+- A ZDL outside the elevation range of the selected cells is an extrapolation. The height is kept and marked with `*` in the tables; the panel shows it as text ("ZDL = … m* (extrapolated, outside data range)") instead of a line. Many JJA and some DJF/MAM values are extrapolated or missing, especially in the Iberian mountains, Scandes and Iceland.
 - The land threshold "> 0.5 sftlf" is implemented as land fraction > 0.5 (sftlf > 50 %). Read ZDL values with the R² in each panel.
 
 ### `SCRIPTS/07b_compute_ZDL_seasonal_eobs.R`
@@ -137,7 +137,7 @@ Output:
 
 These are kept apart from `RESULTS/ZDL` so that script 08 does not include E-OBS in the model ensemble overview.
 
-Caveat: many regions and seasons have no E-OBS ZDL, because the fit has no negative slope or the zero-degree elevation lies outside the orography range of the selected cells. The region label "mm" in the output names comes from the mask variable names in `EEA_mountain_masks_EUR12.nc` (for example `Central_European_mm`), which is also the case for script 07a.
+Caveat: many regions and seasons have no E-OBS ZDL, because the fit has no negative slope. Zero-degree elevations outside the orography range of the selected cells are reported as extrapolated (marked `*`). The region label "mm" in the output names comes from the mask variable names in `EEA_mountain_masks_EUR12.nc` (for example `Central_European_mm`), which is also the case for script 07a.
 
 ### `SCRIPTS/08_plot_ZDL_perregion_fullensemble_eobs.R`
 Overview figures of the ZDL tables from script 07a (models) and script 07b (E-OBS). Reads `RESULTS/ZDL/<Region>_<SEASON>_ZDL.csv` and `RESULTS/ZDL_EOBS/<Region>_<SEASON>_ZDL.csv` (tab-separated, header `MODEL<TAB>ZDL`, then a `========` line). Runs with base R; use the same Rscript as for script 07a or any R installation.
@@ -146,12 +146,12 @@ Overview figures of the ZDL tables from script 07a (models) and script 07b (E-OB
 Rscript SCRIPTS/08_plot_ZDL_perregion_fullensemble_eobs.R
 ```
 
-Output: `PLOTS/ZDL/ZDL_overview_<Region>.png`, one figure per region (12 files). Each has four panels (DJF, MAM, JJA, SON) placed side by side in one row, with a common y-axis (ZDL in m) shared by all panels of a region and no x-axis. Every model is a horizontal line at its ZDL; missing ZDL values are skipped. The E-OBS ZDL is a black line in each panel where it is available (legend entry "E-OBS"). The legend sits below the panels.
+Output: `PLOTS/ZDL/ZDL_overview_<Region>.png`, one figure per region (12 files). Each has four panels (DJF, MAM, JJA, SON) placed side by side in one row, with a common y-axis (ZDL in m) shared by all panels of a region and no x-axis. Every model is a horizontal line at its ZDL; missing ZDL values are skipped. Extrapolated ZDLs (marked `*` in the tables) are drawn dashed and all other ZDLs solid; the legend explains this convention. The E-OBS ZDL is a thicker black line in each panel where it is available (legend entry "E-OBS"), with the same solid/dashed rule. The legend sits below the panels.
 
 Colours are fixed per model across all regions. Variants of the same model family share a hue and differ in lightness (families: REMO2020, WRF451Q, CCLM6, ICON-CLM, ALADIN/ALARO; other models have their own hue). The legend below the panels lists all models.
 
 ### `SCRIPTS/09a_compute_ZDL_timeseries_seasonal_indivmodels.R`
-Computes an annual seasonal ZDL for each model and region from 1981 to 2020, using the same regional masks, land-fraction threshold, regression and no-extrapolation rule as script 07a. At least three finite temperature/elevation pairs are required. Heights are rounded to whole metres; invalid fits are `NA`.
+Computes an annual seasonal ZDL for each model and region from 1981 to 2020, using the same regional masks, land-fraction threshold and regression as script 07a. At least three finite temperature/elevation pairs are required. Heights are rounded to whole metres; invalid fits are `NA`, and extrapolated heights are marked with `*` as in script 07a.
 
 ```bash
 /home/skotlarski/.conda/envs/zdl-r/bin/Rscript SCRIPTS/09a_compute_ZDL_timeseries_seasonal_indivmodels.R
@@ -177,4 +177,4 @@ Plots the annual seasonal ZDL series from scripts 09a and 09b. Run with base R:
 Rscript SCRIPTS/10_plot_ZDL_timeseries_perregion_fullensemble_eobs.R
 ```
 
-Output: `PLOTS/ZDL/ZDL_timeseries_<Region>.png`, one figure per region with DJF, MAM, JJA and SON panels, a common ZDL height axis and a model legend. Each model has a line and small circular markers at available annual values; missing values break the line. E-OBS is shown in black with a dashed line and markers. Colours match script 08 via the shared `SCRIPTS/08_10_model_colours.R` helper. The script requires a model and E-OBS table for every region and season and checks the year columns and model names.
+Output: `PLOTS/ZDL/ZDL_timeseries_<Region>.png`, one figure per region with DJF, MAM, JJA and SON panels, a common ZDL height axis and a model legend. Each model has a line and small circular markers at available annual values; missing values break the line. Extrapolated (`*`) years are marked with an x. Lines are solid throughout, including across extrapolated years. E-OBS is shown in black, with the same x marker rule. The legend lists the models and E-OBS, plus an entry explaining the x marker. Colours match script 08 (the same `model_colours()` function is defined in both scripts). The script requires a model and E-OBS table for every region and season and checks the year columns and model names.

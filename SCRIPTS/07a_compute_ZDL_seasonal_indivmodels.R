@@ -48,23 +48,27 @@ masks <- setNames(lapply(mask_names, function(v) ncvar_get(mask_nc, v)), mask_na
 nc_close(mask_nc)
 
 # Fit tas = a + b * orog on the selected cells; ZDL = elevation where the fit gives 0 degC.
-# ZDL is NA if b >= 0 or if it lies outside the orography range of the cells (extrapolation).
+# ZDL is NA if b >= 0. If it lies outside the orography range of the cells it is extrapolated:
+# the height is kept and flagged (extrap = TRUE), and written with a trailing "*".
 fit_zdl <- function(tas, orog) {
   fit <- lm(tas ~ orog)
   a <- unname(coef(fit)[1])
   b <- unname(coef(fit)[2])
   z0 <- if (!is.na(b) && b < 0) -a / b else NA_real_
-  extrap <- !is.na(z0) && (z0 < min(orog) || z0 > max(orog))
-  if (extrap) z0 <- NA_real_
+  extrap <- is.finite(z0) && (z0 < min(orog) || z0 > max(orog))
   list(a = a, b = b, z0 = z0, n = length(tas), r2 = summary(fit)$r.squared, extrap = extrap)
+}
+
+format_zdl <- function(z0, extrap) {
+  if (!is.finite(z0)) return("NA")
+  paste0(sprintf("%.0f", z0), if (extrap) "*" else "")
 }
 
 # ZDL rows per region and season, key "region|season", written to RESULTS/ZDL after the loop
 zdl_rows <- list()
-record_zdl <- function(region, season, tag, z0) {
-  val <- if (is.finite(z0)) sprintf("%.0f", z0) else "NA"
+record_zdl <- function(region, season, tag, z0, extrap = FALSE) {
   key <- paste(region, season, sep = "|")
-  zdl_rows[[key]] <<- c(zdl_rows[[key]], paste0(tag, "\t", val))
+  zdl_rows[[key]] <<- c(zdl_rows[[key]], paste0(tag, "\t", format_zdl(z0, extrap)))
 }
 
 for (m in read_models(MODELS_FILE)) {
@@ -95,9 +99,8 @@ for (m in read_models(MODELS_FILE)) {
 
     xl <- range(unlist(lapply(seq_along(SEASONS), function(i) tas[[i]][base_ok])), na.rm = TRUE)
     yl <- range(orog[base_ok], na.rm = TRUE)
-    # ZDL (if reported) lies within this range, so the y-axis already covers it
-    z0s <- vapply(fits, function(f) f$z0, numeric(1))
-    for (i in seq_along(SEASONS)) record_zdl(region, SEASONS[i], tag, z0s[i])
+    # the y-axis covers the orography of the cells; extrapolated ZDLs may lie outside it and are shown as text
+    for (i in seq_along(SEASONS)) record_zdl(region, SEASONS[i], tag, fits[[i]]$z0, fits[[i]]$extrap)
     yy <- seq(yl[1], yl[2], length.out = 100)
 
     png(file.path(PLOT_DIR, paste0(tag, "_", region, "_ZDL.png")),
@@ -116,19 +119,22 @@ for (m in read_models(MODELS_FILE)) {
         points(x, z, pch = 16, cex = 0.4, col = rgb(0, 0, 0, 0.3))
         lines(f$a + f$b * yy, yy, col = "red", lwd = 2)
       }
-      if (is.finite(f$z0)) {
+      if (is.finite(f$z0) && !f$extrap) {
         abline(h = f$z0, col = "blue", lty = 2, lwd = 2)
         text(xl[1], f$z0, labels = sprintf("ZDL = %.0f m", f$z0), pos = 3, col = "blue", font = 2)
+      } else if (f$extrap) {
+        text(mean(xl), mean(yl), labels = sprintf("ZDL = %.0f m* (extrapolated, outside data range)", f$z0),
+             col = "blue")
       } else {
-        why <- if (f$extrap) "ZDL outside data range (missing)" else "no ZDL (slope >= 0)"
-        text(mean(xl), mean(yl), labels = why, col = "blue")
+        text(mean(xl), mean(yl), labels = "no ZDL (slope >= 0)", col = "blue")
       }
     }
     mtext(sprintf("%s | %s", tag, label), outer = TRUE, cex = 1.1, font = 2)
     dev.off()
 
     cat(sprintf("%s | %s: %s\n", tag, label,
-                paste(sprintf("%s %s m", SEASONS, ifelse(is.finite(z0s), round(z0s), "NA")), collapse = ", ")))
+                paste(sprintf("%s %s m", SEASONS, vapply(fits, function(f) format_zdl(f$z0, f$extrap), "")),
+                      collapse = ", ")))
   }
 }
 

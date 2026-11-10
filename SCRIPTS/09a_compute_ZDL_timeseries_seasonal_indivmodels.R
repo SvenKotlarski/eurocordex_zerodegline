@@ -49,12 +49,12 @@ for (m in models) {
     if (!identical(file_years, expected)) stop("Unexpected seasonal years in ", file)
     nc <- open_tas(file, dim(orog))
     if (nc$dim$time$len != length(dates)) stop("Time dimension mismatch in ", file)
-    values <- matrix(NA_real_, nrow = length(regions), ncol = length(YEARS))
+    values <- matrix(NA_character_, nrow = length(regions), ncol = length(YEARS))
 
     record_step <- function(tas, year) {
       for (i in seq_along(regions)) {
         ok <- base_ok[[i]][is.finite(tas[base_ok[[i]]])]
-        values[i, match(year, YEARS)] <<- fit_zdl(tas[ok], orog[ok])
+        values[i, match(year, YEARS)] <<- format_zdl(fit_zdl(tas[ok], orog[ok]))
       }
     }
 
@@ -62,7 +62,8 @@ for (m in models) {
     nc_close(nc)
 
     for (i in seq_along(regions)) {
-      vals <- ifelse(is.finite(values[i, ]), sprintf("%.0f", values[i, ]), "NA")
+      vals <- values[i, ]
+      vals[is.na(vals)] <- "NA"
       rows[[regions[i]]][[season]] <- c(rows[[regions[i]]][[season]],
                                         paste(c(tag, vals), collapse = "\t"))
     }
