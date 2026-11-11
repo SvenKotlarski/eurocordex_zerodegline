@@ -86,7 +86,7 @@ for (region in regions) {
   png(file.path(PLOT_DIR, sprintf("ZDL_overview_%s.png", region)),
       width = 2400, height = 1350, res = 200, type = "cairo")
   layout(matrix(c(1, 2, 3, 4, 5, 5, 5, 5), nrow = 2, byrow = TRUE), heights = c(1, 0.6))
-  par(oma = c(0, 0, 2, 0), las = 1)
+  par(oma = c(0, 0, 3, 0), las = 1)
 
   for (i in seq_along(SEASONS)) {
     s <- SEASONS[i]
@@ -117,7 +117,8 @@ for (region in regions) {
          col = c(model_col[all_models], "black", "black", "black"),
          lwd = c(rep(1, n_mod), 2, 1, 1), lty = c(rep(1, n_mod), 1, 1, 2),
          ncol = 3, bty = "n", cex = 1.1, title = "Model")
-  mtext(label, outer = TRUE, cex = 1.2, font = 2)
+  mtext(label, outer = TRUE, line = 1.6, cex = 1.2, font = 2)
+  mtext("Zero-degree line elevation, 1981-2020", outer = TRUE, line = 0.4, cex = 1, font = 1)
   dev.off()
 }
 

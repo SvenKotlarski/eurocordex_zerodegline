@@ -105,7 +105,7 @@ for (region in regions) {
   png(file.path(PLOT_DIR, sprintf("ZDL_timeseries_%s.png", region)),
       width = 3600, height = 1800, res = 200, type = "cairo")
   layout(matrix(c(1, 2, 3, 4, 5, 5, 5, 5), nrow = 2, byrow = TRUE), heights = c(1, 0.6))
-  par(oma = c(0, 0, 2, 0), las = 1)
+  par(oma = c(0, 0, 3, 0), las = 1)
   for (i in seq_along(SEASONS)) {
     season <- SEASONS[i]
     par(mar = if (i == 1) c(4, 4.5, 3, 0.5) else c(4, 0.5, 3, 0.5))
@@ -132,7 +132,8 @@ for (region in regions) {
          lwd = c(rep(1, n_mod), 1.3, 1), lty = c(rep(1, n_mod), 1, 0),
          pch = c(rep(16, n_mod), 16, 4), pt.cex = c(rep(0.5, n_mod), 0.4, 0.6),
          ncol = 3, bty = "n", cex = 1.1, title = "Model")
-  mtext(gsub("_", " ", region), outer = TRUE, cex = 1.2, font = 2)
+  mtext(gsub("_", " ", region), outer = TRUE, line = 1.6, cex = 1.2, font = 2)
+  mtext("Zero-degree line elevation, 1981-2020", outer = TRUE, line = 0.4, cex = 1, font = 1)
   dev.off()
 }
 cat("Done. Time-series figures written to", PLOT_DIR, "\n")
