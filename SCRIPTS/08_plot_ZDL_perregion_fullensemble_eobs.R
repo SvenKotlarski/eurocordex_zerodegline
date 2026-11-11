@@ -85,16 +85,18 @@ for (region in regions) {
 
   png(file.path(PLOT_DIR, sprintf("ZDL_overview_%s.png", region)),
       width = 2400, height = 1350, res = 200, type = "cairo")
-  layout(matrix(c(1, 2, 3, 4, 5, 5, 5, 5), nrow = 2, byrow = TRUE), heights = c(1, 0.6))
-  par(oma = c(0, 0, 3, 0), las = 1)
+  layout(matrix(c(1, 2, 3, 4, 5, 5, 5, 5), nrow = 2, byrow = TRUE),
+         widths = c(1.25, 1, 1, 1), heights = c(1, 0.6))
+  par(oma = c(0, 0, 4.5, 0), las = 1, mgp = c(3.5, 1, 0))
 
   for (i in seq_along(SEASONS)) {
     s <- SEASONS[i]
     # common y-axis: labels on the first panel only, same range in all panels
-    par(mar = if (i == 1) c(2, 4.5, 3, 0.5) else c(2, 0.5, 3, 0.5))
+    par(mar = if (i == 1) c(2, 6, 3, 0.5) else c(2, 0.5, 3, 0.5))
     d <- zdl[[region]][[s]]
     plot(NA, xlim = c(0, 1), ylim = yl, xaxt = "n", yaxt = if (i == 1) "s" else "n",
          xlab = "", ylab = if (i == 1) "ZDL (m)" else "", main = s)
+    abline(h = axTicks(2), col = "grey75", lty = 2)
     if (!is.null(d)) {
       ok <- is.finite(d$zdl)
       if (any(ok)) {
@@ -117,8 +119,8 @@ for (region in regions) {
          col = c(model_col[all_models], "black", "black", "black"),
          lwd = c(rep(1, n_mod), 2, 1, 1), lty = c(rep(1, n_mod), 1, 1, 2),
          ncol = 3, bty = "n", cex = 1.1, title = "Model")
-  mtext(label, outer = TRUE, line = 1.6, cex = 1.2, font = 2)
-  mtext("Zero-degree line elevation, 1981-2020", outer = TRUE, line = 0.4, cex = 1, font = 1)
+  mtext(label, outer = TRUE, line = 2.2, cex = 1.2, font = 2)
+  mtext("Zero-degree line elevation, 1981-2020", outer = TRUE, line = 0.8, cex = 1, font = 1)
   dev.off()
 }
 
