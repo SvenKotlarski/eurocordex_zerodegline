@@ -1,6 +1,6 @@
 # EURO-CORDEX zero-degree line: processing scripts
 
-Script suite to compute and validate the zero-degree line (ZDL) elevation in the European EEA mountain regions in the new EURO-CORDEX-CMIP6 ensemble (ERA5-driven runs only). Validation reference: E-OBS. ZDL is computed by linear regression of seasonal mean temperatur vs. elevation and extracting the value for temperature=0 from linear fit.
+Script suite to compute and validate the zero-degree line (ZDL) elevation in the European EEA mountain regions in the new EURO-CORDEX-CMIP6 ensemble (ERA5-driven runs only). Validation reference: E-OBS. The ZDL is computed by linear regression of seasonal mean temperature vs. elevation and extracting the value for temperature=0°C from the linear fit.
 
 *Sven Kotlarski, ETH Zurich/MeteoSwiss*
 
