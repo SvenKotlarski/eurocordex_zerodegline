@@ -4,19 +4,19 @@
 #  - seasonal series for the full period and for 1981-2020, and multi-year seasonal means (1981-2020),
 #    with the same season windows and names as script 02
 #  - all tas files and the E-OBS elevation (elevation) remapped onto the common EUR-12 grid (424 x 412)
-# Output: RESULTS/EOBS_v31.0e_*.nc (native grid) and RESULTS/EOBS_v31.0e_*_EUR12.nc (EUR-12 grid)
+# Temperature outputs go to RESULTS; EUR-12 orography goes to RESULTS/OROG.
 
 set -euo pipefail
 
 WORKDIR="/mnt/CORDEX_CMIP6_tmp/user_tmp/skotlarski/eurocordex_zerodegline"
-WORK="$WORKDIR/WORK"
+WORK_ROOT="$WORKDIR/WORK"
 RESULTS="$WORKDIR/RESULTS"
+OROG_DIR="$RESULTS/OROG"
 EOBS_DIR="/mnt/CORDEX_CMIP6_tmp/aux_data/eobs"
 TG="$EOBS_DIR/tg_ens_mean_0.1deg_reg_v31.0e.nc"
 ELEV="$EOBS_DIR/elev_ens_0.1deg_reg_v31.0e.nc"
 TAG="EOBS_v31.0e"
 REF="$RESULTS/KNMI_RACMO23E_tas_mon_1980-2020.nc"   # exact EUR-12 grid (424 x 412)
-GRIDES="$WORK/eur12_griddes.txt"
 
 # Same window logic as script 02; the full-period windows end at the last complete season of the E-OBS record (Dec 2024).
 FULL_START="1950-03-01"
@@ -28,7 +28,15 @@ DJF_END="2019-11-30"
 CLIM_START="1981-01-01"
 CLIM_END="2020-12-31"
 
-mkdir -p "$WORK" "$RESULTS"
+mkdir -p "$WORK_ROOT" "$RESULTS" "$OROG_DIR"
+WORK="$(mktemp -d "$WORK_ROOT/06a-eobs.XXXXXXXX")"
+cleanup() {
+    rm -f -- "$WORK/eur12_griddes.txt" "$WORK/${TAG}_tas_mon_all.nc" \
+        "$WORK/${TAG}_orog.nc" "$WORK/remap_eobs_tmp.nc"
+    rmdir -- "$WORK"
+}
+trap cleanup EXIT
+GRIDES="$WORK/eur12_griddes.txt"
 cdo -s griddes "$REF" > "$GRIDES"
 
 mon_all="$WORK/${TAG}_tas_mon_all.nc"
@@ -72,7 +80,7 @@ done
 orog_raw="$WORK/${TAG}_orog.nc"
 cdo -O -s -chname,elevation,orog "$ELEV" "$orog_raw"
 
-python3 - "$REF" "$GRIDES" "$WORK" "$RESULTS" "$orog_raw" "${TAS_FILES[@]}" <<'PY'
+python3 - "$REF" "$GRIDES" "$WORK" "$RESULTS" "$OROG_DIR" "$orog_raw" "${TAS_FILES[@]}" <<'PY'
 import os
 import subprocess
 import sys
@@ -80,8 +88,8 @@ import sys
 import numpy as np
 import xarray as xr
 
-ref_path, griddes, work, results = sys.argv[1:5]
-srcs = sys.argv[5:]
+ref_path, griddes, work, results, orog_dir = sys.argv[1:6]
+srcs = sys.argv[6:]
 
 ref = xr.open_dataset(ref_path)
 ny_ref, nx_ref = ref["rlat"].size, ref["rlon"].size
@@ -116,11 +124,11 @@ for src in srcs:
     else:
         out[var] = (("rlat", "rlon"), vals, {**attrs, "grid_mapping": "crs"})
 
-    out_path = os.path.join(results, os.path.basename(src)[:-3] + "_EUR12.nc")
+    out_dir = orog_dir if var == "orog" else results
+    out_path = os.path.join(out_dir, os.path.basename(src)[:-3] + "_EUR12.nc")
     out.to_netcdf(out_path, encoding=encoding)
     print(f"{os.path.basename(src)}: remapbil, missing {float(np.isnan(vals).mean()):.1%} -> "
           f"{os.path.basename(out_path)}", flush=True)
 PY
 
-find "$WORK" -mindepth 1 -delete
 echo "Done. E-OBS files written to $RESULTS"

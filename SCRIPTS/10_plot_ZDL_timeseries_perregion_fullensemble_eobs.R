@@ -30,7 +30,7 @@ model_colours <- function(models) {
 
 ZDL_DIR <- file.path(ROOT, "RESULTS", "ZDL")
 EOBS_DIR <- file.path(ROOT, "RESULTS", "ZDL_EOBS")
-PLOT_DIR <- file.path(ROOT, "PLOTS", "ZDL")
+PLOT_DIR <- file.path(ROOT, "PLOTS", "ZDL_TIMESERIES")
 SEASONS <- c("DJF", "MAM", "JJA", "SON")
 YEARS <- 1981:2020
 

@@ -1,6 +1,6 @@
 # EURO-CORDEX zero-degree line: processing scripts
 
-Script suite to compute and validate the zero-degree line (ZDL) elevation in the European EEA mountain regions in the new EURO-CORDEX-CMIP6 ensemble (ERA5-driven runs only). Validation reference: E-OBS. The ZDL is computed by linear regression of seasonal mean temperature vs. elevation and extracting the value for temperature=0°C from the linear fit.
+Script suite to compute and validate the zero-degree line (ZDL) elevation in the European EEA mountain regions in the new EURO-CORDEX-CMIP6 ensemble (ERA5-driven runs only). Validation references: E-OBS and CERRA. The ZDL is computed by linear regression of seasonal mean temperature vs. elevation and extracting the value for temperature=0°C from the linear fit.
 
 *Sven Kotlarski, ETH Zurich/MeteoSwiss*
 
@@ -79,8 +79,8 @@ Open items:
 - **`sftlaf` folders:** script 05 uses only `fx/sftlf`. Some models also provide `fx/sftlaf`, which has not been checked or used. Decide whether it should be a fallback.
 - **Script 04 threshold (related):** the "--> 0" in the request for cells outside a region was read as 1 for in-region cells (more than 50% of the cell area) and 0 otherwise. Confirm this interpretation.
 
-### `SCRIPTS/06_prepare_eobs.sh`
-Prepares the E-OBS v31.0e mean temperature (`tg`, daily, 0.1°) as a reference dataset, following the same steps and file names as script 02. Run with `bash SCRIPTS/06_prepare_eobs.sh`.
+### `SCRIPTS/06a_prepare_eobs.sh`
+Prepares the E-OBS v31.0e mean temperature (`tg`, daily, 0.1°) as a reference dataset, following the same steps and file names as script 02. Run with `bash SCRIPTS/06a_prepare_eobs.sh`.
 
 Inputs (in `/mnt/CORDEX_CMIP6_tmp/aux_data/eobs/`): `tg_ens_mean_0.1deg_reg_v31.0e.nc` and `elev_ens_0.1deg_reg_v31.0e.nc`.
 
@@ -89,9 +89,18 @@ Steps:
 2. Seasonal series for the full period (`EOBS_v31.0e_tas_<SEASON>_1950-2024.nc`; DJF `1951-2023`) and for 1981–2020 (`EOBS_v31.0e_tas_<SEASON>_1981-2020.nc`; DJF `1982-2019`), using the windows of script 02.
 3. Multi-year seasonal means over 1981–2020 (`EOBS_v31.0e_tas_<SEASON>_mean_1981-2020.nc`; DJF `..._mean_1982-2019.nc`).
 4. Every tas file is remapped (`cdo remapbil`) onto the EUR-12 grid, giving `<name>_EUR12.nc`. E-OBS covers land only and a smaller domain than EUR-12, so about 63–65% of the EUR-12 cells are missing.
-5. The E-OBS elevation (`elevation`, m) is renamed to `orog` and remapped onto EUR-12 as `RESULTS/EOBS_v31.0e_orog_EUR12.nc`.
+5. The E-OBS elevation (`elevation`, m) is renamed to `orog` and remapped onto EUR-12 as `RESULTS/OROG/EOBS_v31.0e_orog_EUR12.nc`.
 
-Output: `RESULTS/EOBS_v31.0e_*.nc` (native grid) and `RESULTS/EOBS_v31.0e_*_EUR12.nc` (EUR-12 grid).
+Output: temperature files `RESULTS/EOBS_v31.0e_*.nc` (native grid) and `RESULTS/EOBS_v31.0e_*_EUR12.nc` (EUR-12 grid), and EUR-12 orography in `RESULTS/OROG/`. E-OBS has no land-sea mask. The script cleans up only its own temporary files.
+
+### `SCRIPTS/06b_prepare_CERRA.sh`
+Prepares CERRA as an additional reference using monthly 2 m temperature from `/mnt/CORDEX_CMIP6_tmp/aux_data/cerra/mon/tas/` and the fixed orography and land-fraction files in `/mnt/CORDEX_CMIP6_tmp/aux_data/cerra/fx/`. Run with `bash SCRIPTS/06b_prepare_CERRA.sh`. CDO, NCO, Python, NumPy, xarray and a NetCDF backend are required.
+
+The monthly source starts in September 1984; the script checks that all months through December 2020 occur exactly once and that grids and units match. It combines `t2m` (already in K) into `RESULTS/CERRA_tas_mon_1984-2020.nc`, renamed to `tas` with a `time` axis. Seasonal series are `CERRA_tas_DJF_1985-2019.nc`, `CERRA_tas_MAM_1985-2020.nc`, `CERRA_tas_JJA_1985-2020.nc` and `CERRA_tas_SON_1984-2020.nc`. Seasons are included only when all three months are present; DJF 2020 is excluded to match scripts 02 and 06a.
+
+Multi-year mean temperature fields use CDO `yseasmean` on the monthly values, as in scripts 02 and 06a. MAM, JJA and SON cover 1991–2020 (`CERRA_tas_<SEASON>_mean_1991-2020.nc`); DJF covers 1991–2019 (`CERRA_tas_DJF_mean_1991-2019.nc`), consistent with the excluded DJF 2020.
+
+The fixed CERRA `orog` field is in metres; the fixed `sftlf` land fraction is converted from 0–1 to percent (0–100), as for the model `sftlf` fields. Native and EUR-12 static outputs are `RESULTS/OROG/CERRA_orog.nc`, `RESULTS/OROG/CERRA_orog_EUR12.nc`, `RESULTS/LSM/CERRA_sftlf.nc` and `RESULTS/LSM/CERRA_sftlf_EUR12.nc`. Temperature outputs remain in `RESULTS/` and are also bilinearly remapped to EUR-12 as `<name>_EUR12.nc`, with the reference coordinates and missing values as NaN. The script prints the missing fraction and cleans up only its own temporary files.
 
 ### `SCRIPTS/07a_compute_ZDL_seasonal_indivmodels.R`
 R script that estimates the zero-degree line (ZDL) for each model, mountain region and season. It runs with the conda env `zdl-r`, which provides R and `ncdf4` (the system R has no usable netCDF support):
@@ -113,7 +122,9 @@ Method per model, region and season:
 
 Output: `PLOTS/ZDL/<INST>_<MODEL>_<Region>_ZDL.png`, one figure per model and region (252 files = 21 models × 12 regions). Each figure has four panels (DJF, MAM, JJA, SON) showing tas (°C, x-axis) against orography (m, y-axis), the fitted line, the ZDL (blue dashed line with its elevation), a dotted 0 °C reference, and n and R² in the title. A summary line per model and region is printed to stdout.
 
-Tables: `RESULTS/ZDL/<Region>_<SEASON>_ZDL.csv` (48 files = 12 regions × 4 seasons). Each is tab-separated with the header `MODEL<TAB>ZDL`, a line of `========`, then one row per model, where MODEL is `<INST>_<MODEL>` and ZDL is the zero-degree elevation in m (rounded), or `NA` if missing. An extrapolated ZDL (outside the orography range of the selected cells) is written with a trailing `*`, e.g. `2750*`.
+Tables: `RESULTS/ZDL/<Region>_<SEASON>_ZDL_1981-2020.csv` (48 files = 12 regions × 4 seasons; DJF 1982–2019). Each is tab-separated with the header `MODEL<TAB>ZDL`, a line of `========`, then one row per model, where MODEL is `<INST>_<MODEL>` and ZDL is the zero-degree elevation in m (rounded), or `NA` if missing. An extrapolated ZDL (outside the orography range of the selected cells) is written with a trailing `*`, e.g. `2750*`.
+
+Additional tables: `RESULTS/ZDL/<Region>_<SEASON>_ZDL_1991-2020.csv`, in the same format, calculated from the multi-year mean temperature for 1991–2020. DJF uses 1991–2019, excluding DJF 2020 to match the existing DJF window. The seasonal temperature means are computed with CDO `yseasmean` from the EUR-12 monthly inputs, using the same monthly-mean method as script 02; each required month must be present. The ZDL is fitted to the resulting mean temperature field, not averaged from annual ZDL values. At least three valid cells are required.
 
 Caveats:
 - A ZDL outside the elevation range of the selected cells is an extrapolation. The height is kept and marked with `*` in the tables; the panel shows it as text ("ZDL = … m* (extrapolated, outside data range)") instead of a line. Many JJA and some DJF/MAM values are extrapolated or missing, especially in the Iberian mountains, Scandes and Iceland.
@@ -127,30 +138,44 @@ Same ZDL calculation as script 07a, for E-OBS (`EOBS_v31.0e`) instead of the mod
 ```
 
 Inputs:
-- `RESULTS/EOBS_v31.0e_tas_<SEASON>_mean_1981-2020_EUR12.nc` (DJF `..._mean_1982-2019_EUR12.nc`), from script 06
-- `RESULTS/EOBS_v31.0e_orog_EUR12.nc` (orography, m), from script 06
+- `RESULTS/EOBS_v31.0e_tas_<SEASON>_mean_1981-2020_EUR12.nc` (DJF `..._mean_1982-2019_EUR12.nc`), from script 06a
+- `RESULTS/OROG/EOBS_v31.0e_orog_EUR12.nc` (orography, m), from script 06a
 - `RESULTS/EEA_mountain_masks_EUR12.nc` (`mask_<region>`)
 
 Method per region and season: same as script 07a, with two differences. E-OBS has no land-fraction field, so the cells are those with the region mask equal to 1 and finite tas and orography (E-OBS has values over land only). The land threshold is not applied.
 
 Output:
 - `PLOTS/ZDL_EOBS/EOBS_v31.0e_<Region>_ZDL.png` (12 figures, same layout as script 07a)
-- `RESULTS/ZDL_EOBS/<Region>_<SEASON>_ZDL.csv` (48 files, same format as `RESULTS/ZDL`, with the single row `EOBS_v31.0e`)
+- `RESULTS/ZDL_EOBS/<Region>_<SEASON>_ZDL_1981-2020.csv` (48 files, same format as `RESULTS/ZDL`, with the single row `EOBS_v31.0e`; DJF 1982–2019)
+- `RESULTS/ZDL_EOBS/<Region>_<SEASON>_ZDL_1991-2020.csv` (48 additional files, same 1991–2020 method and DJF 1991–2019 window as script 07a)
 
 These are kept apart from `RESULTS/ZDL` so that script 08 does not include E-OBS in the model ensemble overview.
+Scripts 07a and 07b compute the additional means from the monthly EUR-12 fields; CDO and the monthly files are required.
 
 Caveat: many regions and seasons have no E-OBS ZDL, because the fit has no negative slope. Zero-degree elevations outside the orography range of the selected cells are reported as extrapolated (marked `*`). The region label "mm" in the output names comes from the mask variable names in `EEA_mountain_masks_EUR12.nc` (for example `Central_European_mm`), which is also the case for script 07a.
 
-### `SCRIPTS/08_plot_ZDL_perregion_fullensemble_eobs.R`
-Overview figures of the ZDL tables from script 07a (models) and script 07b (E-OBS). Reads `RESULTS/ZDL/<Region>_<SEASON>_ZDL.csv` and `RESULTS/ZDL_EOBS/<Region>_<SEASON>_ZDL.csv` (tab-separated, header `MODEL<TAB>ZDL`, then a `========` line). Runs with base R; use the same Rscript as for script 07a or any R installation.
+### `SCRIPTS/07c_compute_ZDL_seasonal_CERRA.R`
+Computes CERRA ZDL estimates for the 1991–2020 seasonal climatology using the same regression and extrapolation convention as script 07b. DJF covers 1991–2019, as in script 06b. Run with:
 
 ```bash
-Rscript SCRIPTS/08_plot_ZDL_perregion_fullensemble_eobs.R
+/home/skotlarski/.conda/envs/zdl-r/bin/Rscript SCRIPTS/07c_compute_ZDL_seasonal_CERRA.R
 ```
 
-Output: `PLOTS/ZDL/ZDL_overview_<Region>.png`, one figure per region (12 files). Each has four panels (DJF, MAM, JJA, SON) placed side by side in one row, with a common y-axis (ZDL in m) shared by all panels of a region and no x-axis. Every model is a horizontal line at its ZDL; missing ZDL values are skipped. Extrapolated ZDLs (marked `*` in the tables) are drawn dashed and all other ZDLs solid; the legend explains this convention. The E-OBS ZDL is a thicker black line in each panel where it is available (legend entry "E-OBS"), with the same solid/dashed rule. The legend sits below the panels.
+Inputs are the EUR-12 CERRA seasonal mean temperatures from script 06b (`RESULTS/CERRA_tas_<SEASON>_mean_1991-2020_EUR12.nc`, DJF `..._mean_1991-2019_EUR12.nc`), `RESULTS/OROG/CERRA_orog_EUR12.nc`, `RESULTS/LSM/CERRA_sftlf_EUR12.nc`, and the EEA masks. Unlike E-OBS, CERRA includes sea cells, so the region mask must equal 1 and land fraction must exceed 50%, as for models; temperature and orography must be finite.
+
+Outputs are `PLOTS/ZDL_CERRA/CERRA_<Region>_ZDL.png` (four seasonal panels per region) and `RESULTS/ZDL_CERRA/<Region>_<SEASON>_ZDL_1991-2020.csv` (one `CERRA` row, same tab-separated format and `*` extrapolation marker as script 07b). At least three valid cells are needed for a fit; a figure is skipped if all seasons have fewer than three. These outputs are separate from E-OBS and model results.
+
+### `SCRIPTS/08_plot_ZDL_perregion_fullensemble_eobs_cerra.R`
+Overview figures of the 1981–2020 and 1991–2020 ZDL tables from script 07a (models) and script 07b (E-OBS), with CERRA from script 07c for 1991–2020 only. Reads `RESULTS/ZDL/<Region>_<SEASON>_ZDL_<PERIOD>.csv`, `RESULTS/ZDL_EOBS/<Region>_<SEASON>_ZDL_<PERIOD>.csv`, and `RESULTS/ZDL_CERRA/<Region>_<SEASON>_ZDL_1991-2020.csv` (tab-separated, header `MODEL<TAB>ZDL`, then a `========` line). Both model and E-OBS periods and all four seasons must be available for each region; CERRA tables are required for all seasons of 1991–2020. Runs with base R; use the same Rscript as for script 07a or any R installation.
+
+```bash
+Rscript SCRIPTS/08_plot_ZDL_perregion_fullensemble_eobs_cerra.R
+```
+
+Output: `PLOTS/ZDL_OVERVIEW/ZDL_overview_<Region>_<PERIOD>.png`, one figure per region and period (24 files). Titles identify the climatology and its DJF window: 1982–2019 for 1981–2020, and 1991–2019 for 1991–2020. Each figure has four panels (DJF, MAM, JJA, SON) placed side by side in one row, with a common y-axis (ZDL in m) shared by all panels of a region and no x-axis. Every model is a thin horizontal line at its ZDL; missing ZDL values are skipped. Extrapolated ZDLs (marked `*` in the tables) are drawn dashed and all other ZDLs solid; the legend explains this convention. E-OBS is a thicker black line and, for 1991–2020, CERRA is a thicker light grey line where available, with a star to the left of each reference line and its legend sample. Both references follow the same solid/dashed rule. CERRA is omitted from the 1981–2020 plots because that climatology is unavailable. The legend sits below the panels.
 
 Colours are fixed per model across all regions. Variants of the same model family share a hue and differ in lightness (families: REMO2020, WRF451Q, CCLM6, ICON-CLM, ALADIN/ALARO; other models have their own hue). The legend below the panels lists all models.
+Scripts 08 and 11 share the input and plotting helpers in `SCRIPTS/08_zdl_overview_helpers.R`.
 
 ### `SCRIPTS/09a_compute_ZDL_timeseries_seasonal_indivmodels.R`
 Computes an annual seasonal ZDL for each model and region from 1981 to 2020, using the same regional masks, land-fraction threshold and regression as script 07a. At least three finite temperature/elevation pairs are required. Heights are rounded to whole metres; invalid fits are `NA`, and extrapolated heights are marked with `*` as in script 07a.
@@ -164,13 +189,22 @@ Inputs are the EUR-12 seasonal time series from scripts 02–03, together with t
 Output: `RESULTS/ZDL/<Region>_<SEASON>_ZDL_timeseries.csv`, one tab-separated file per region and season. The header contains `MODEL` followed by 1981 through 2020, the second line contains `=` characters matching the header's character count, and each subsequent row contains one model's ZDL series. These filenames do not overwrite or match the climatology tables consumed by script 08.
 
 ### `SCRIPTS/09b_compute_ZDL_timeseries_seasonal_eobs.R`
-Computes the equivalent annual seasonal E-OBS ZDL series, using the E-OBS seasonal time series and orography from script 06 and the EEA masks. As in script 07b, cells must have a region mask of 1 and finite temperature and orography; there is no land-fraction threshold. The regression, minimum number of cells, rounding, and DJF 1982–2019 window are the same as in script 09a.
+Computes the equivalent annual seasonal E-OBS ZDL series, using the E-OBS seasonal time series and orography from script 06a and the EEA masks. As in script 07b, cells must have a region mask of 1 and finite temperature and orography; there is no land-fraction threshold. The regression, minimum number of cells, rounding, and DJF 1982–2019 window are the same as in script 09a.
 
 ```bash
 /home/skotlarski/.conda/envs/zdl-r/bin/Rscript SCRIPTS/09b_compute_ZDL_timeseries_seasonal_eobs.R
 ```
 
-Output: `RESULTS/ZDL_EOBS/<Region>_<SEASON>_ZDL_timeseries.csv`, in the same format as script 09a with one row labelled `EOBS_v31.0e`. DJF 1981 and 2020 are `NA`. Scripts 09a and 09b use the shared helpers in `SCRIPTS/09_zdl_timeseries_helpers.R`.
+Output: `RESULTS/ZDL_EOBS/<Region>_<SEASON>_ZDL_timeseries.csv`, in the same format as script 09a with one row labelled `EOBS_v31.0e`. DJF 1981 and 2020 are `NA`. Scripts 09a, 09b and 09c use the shared helpers in `SCRIPTS/09_zdl_timeseries_helpers.R`.
+
+### `SCRIPTS/09c_compute_ZDL_timeseries_seasonal_CERRA.R`
+Computes annual seasonal CERRA ZDL series for 1984–2020 using the EUR-12 seasonal temperatures, orography, land fraction and EEA masks from scripts 06b and 07c. As in 07c, the region mask must be 1, land fraction must exceed 50%, and temperature and elevation must be finite. Fits use at least three cells, with negative slopes required; extrapolated ZDLs are retained and marked `*`, as in script 09b.
+
+```bash
+/home/skotlarski/.conda/envs/zdl-r/bin/Rscript SCRIPTS/09c_compute_ZDL_timeseries_seasonal_CERRA.R
+```
+
+Output: `RESULTS/ZDL_CERRA/<Region>_<SEASON>_ZDL_timeseries.csv`, one tab-separated file per region and season, with header `MODEL` followed by 1984–2020, an `=` separator, and one row labelled `CERRA`. DJF 1984 and 2020 and MAM/JJA 1984 are `NA`, matching the available complete-season files from script 06b; SON starts in 1984. CDO reads and checks the seasonal time axes.
 
 ### `SCRIPTS/10_plot_ZDL_timeseries_perregion_fullensemble_eobs.R`
 Plots the annual seasonal ZDL series from scripts 09a and 09b. Run with base R:
@@ -179,4 +213,13 @@ Plots the annual seasonal ZDL series from scripts 09a and 09b. Run with base R:
 Rscript SCRIPTS/10_plot_ZDL_timeseries_perregion_fullensemble_eobs.R
 ```
 
-Output: `PLOTS/ZDL/ZDL_timeseries_<Region>.png`, one figure per region with DJF, MAM, JJA and SON panels, a common ZDL height axis and a model legend. Each model has a line and small circular markers at available annual values; missing values break the line. Extrapolated (`*`) years are marked with an x. Lines are solid throughout, including across extrapolated years. E-OBS is shown in black, with the same x marker rule. The legend lists the models and E-OBS, plus an entry explaining the x marker. Colours match script 08 (the same `model_colours()` function is defined in both scripts). The script requires a model and E-OBS table for every region and season and checks the year columns and model names.
+Output: `PLOTS/ZDL_TIMESERIES/ZDL_timeseries_<Region>.png`, one figure per region with DJF, MAM, JJA and SON panels, a common ZDL height axis and a model legend. Each model has a line and small circular markers at available annual values; missing values break the line. Extrapolated (`*`) years are marked with an x. Lines are solid throughout, including across extrapolated years. E-OBS is shown in black, with the same x marker rule. The legend lists the models and E-OBS, plus an entry explaining the x marker. Colours use the same `model_colours()` algorithm as script 08. The script requires a model and E-OBS table for every region and season and checks the year columns and model names.
+
+### `SCRIPTS/11_plot_ZDL_perregion__twosets_1991-2020_fullensemble_eobs_cerra.R`
+Plots the 1991–2020 model, E-OBS and CERRA climatology tables used by script 08 (DJF 1991–2019). Run with base R:
+
+```bash
+Rscript SCRIPTS/11_plot_ZDL_perregion__twosets_1991-2020_fullensemble_eobs_cerra.R
+```
+
+Outputs are `PLOTS/ZDL_OVERVIEW/ZDL_overview_twosets_set1_1991-2020.png` and `ZDL_overview_twosets_set2_1991-2020.png`. Each figure has six regions in two columns and three rows, with four seasonal subpanels per region and a shared legend. Set 1 contains Alps, Carpathians, Iberian mountains, Pyrenees, Scandes and Balkans; set 2 contains the remaining six regions in alphabetical order. Each region has its own common seasonal height scale, with elevations below 0 m shaded light grey. Line colours, reference stars and extrapolation styles follow script 08. All four seasons and all three datasets must be present for all 12 regions.

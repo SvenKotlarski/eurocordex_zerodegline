@@ -18,7 +18,7 @@ if (!length(mask_names)) stop("No region masks found")
 masks <- setNames(lapply(mask_names, function(v) ncvar_get(mask_nc, v)), mask_names)
 nc_close(mask_nc)
 regions <- sub("^mask_", "", mask_names)
-orog <- read_var(file.path(RESULTS, paste0(TAG, "_orog_EUR12.nc")), "orog")
+orog <- read_var(file.path(RESULTS, "OROG", paste0(TAG, "_orog_EUR12.nc")), "orog")
 if (any(!vapply(masks, function(mask) identical(dim(mask), dim(orog)), logical(1)))) {
   stop("Grid dimension mismatch for ", TAG)
 }

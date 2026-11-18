@@ -1,4 +1,4 @@
-# Shared input and regression helpers for scripts 09a and 09b.
+# Shared input and regression helpers for scripts 09a, 09b and 09c.
 
 read_var <- function(file, var) {
   nc <- nc_open(file)

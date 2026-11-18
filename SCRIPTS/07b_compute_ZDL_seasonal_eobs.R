@@ -1,6 +1,6 @@
 #!/usr/bin/env Rscript
 # Zero-degree line (ZDL) from E-OBS per mountain region and season, same method as script 07a.
-# Input: E-OBS multi-year seasonal mean tas (1981-2020, DJF 1982-2019) and E-OBS orography on EUR-12, from script 06.
+# Input: E-OBS multi-year seasonal mean tas (1981-2020, DJF 1982-2019) and E-OBS orography on EUR-12, from script 06a.
 # Cells are used where the region mask equals 1, tas and orography are finite (E-OBS has values over land only).
 # Output goes to PLOTS/ZDL_EOBS and RESULTS/ZDL_EOBS, separate from the model results used by script 08.
 # Run with the conda env that has ncdf4:
@@ -13,7 +13,7 @@ RESULTS <- file.path(ROOT, "RESULTS")
 PLOT_DIR <- file.path(ROOT, "PLOTS", "ZDL_EOBS")
 ZDL_DIR <- file.path(RESULTS, "ZDL_EOBS")
 MASK_FILE <- file.path(RESULTS, "EEA_mountain_masks_EUR12.nc")
-OROG_FILE <- file.path(RESULTS, "EOBS_v31.0e_orog_EUR12.nc")
+OROG_FILE <- file.path(RESULTS, "OROG", "EOBS_v31.0e_orog_EUR12.nc")
 TAG <- "EOBS_v31.0e"
 SEASONS <- c("DJF", "MAM", "JJA", "SON")
 PERIOD <- "1981-2020"
@@ -32,6 +32,39 @@ read_tas <- function(file) {
   x <- ncvar_get(nc, "tas")
   if (nc$var$tas$units == "K") x <- x - 273.15
   x
+}
+
+# Compute seasonal mean temperature from the monthly EUR-12 fields, as in scripts 02 and 06a.
+read_climatology_1991_2020 <- function(results, tag, seasons, grid_dim) {
+  files <- Sys.glob(file.path(results, paste0(tag, "_tas_mon_*_EUR12.nc")))
+  if (length(files) != 1L) stop("Expected one monthly EUR-12 tas file for ", tag)
+  file <- files[1]
+  dates <- system2("cdo", c("-s", "showdate", shQuote(file)), stdout = TRUE)
+  if (!is.null(attr(dates, "status"))) stop("Cannot read time axis: ", file)
+  dates <- unlist(strsplit(trimws(paste(dates, collapse = " ")), "[[:space:]]+"))
+  if (!length(dates) || any(!grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}$", dates))) {
+    stop("Invalid time axis: ", file)
+  }
+  months <- substr(dates, 1, 7)
+  required <- c(sprintf("%d-12", 1990:2018),
+                sprintf("%d-01", 1991:2019), sprintf("%d-02", 1991:2019),
+                as.vector(outer(1991:2020, sprintf("%02d", 3:11), paste, sep = "-")))
+  if (any(vapply(required, function(month) sum(months == month) != 1L, logical(1)))) {
+    stop("Monthly input is missing or duplicates a required month: ", file)
+  }
+
+  lapply(seasons, function(season) {
+    start <- if (season == "DJF") "1990-12-01" else "1991-01-01"
+    end <- if (season == "DJF") "2019-03-01" else "2021-01-01"
+    tmp <- tempfile(fileext = ".nc")
+    on.exit(unlink(tmp))
+    status <- system2("cdo", c("-O", "-s", "-yseasmean", paste0("-selseas,", season),
+                               paste0("-seldate,", start, ",", end), shQuote(file), shQuote(tmp)))
+    if (status != 0L) stop("CDO seasonal mean failed for ", file, " ", season)
+    x <- read_tas(tmp)
+    if (!identical(dim(x), grid_dim)) stop("Grid dimension mismatch in ", file)
+    x
+  })
 }
 
 mask_nc <- nc_open(MASK_FILE)
@@ -63,12 +96,22 @@ tas <- lapply(SEASONS, function(s) {
   matrix(as.vector(x), nrow = nrow(orog), ncol = ncol(orog))
 })
 stopifnot(all(vapply(tas, function(x) all(dim(x) == dim(orog)), logical(1))))
+tas_1991 <- read_climatology_1991_2020(RESULTS, TAG, SEASONS, dim(orog))
 
 zdl_rows <- list()
+zdl_rows_1991 <- list()
 for (rg in mask_names) {
   region <- sub("^mask_", "", rg)
   label <- gsub("_", " ", region)
   base_ok <- which(masks[[rg]] == 1 & is.finite(orog))
+
+  for (i in seq_along(SEASONS)) {
+    ok <- base_ok[is.finite(tas_1991[[i]][base_ok])]
+    fit <- if (length(ok) >= 3) fit_zdl(tas_1991[[i]][ok], orog[ok]) else NULL
+    value <- if (is.null(fit)) "NA" else format_zdl(fit$z0, fit$extrap)
+    key <- paste(region, SEASONS[i], sep = "|")
+    zdl_rows_1991[[key]] <- paste0(TAG, "\t", value)
+  }
 
   fits <- lapply(seq_along(SEASONS), function(i) {
     ok <- base_ok[is.finite(tas[[i]][base_ok])]
@@ -127,7 +170,9 @@ dir.create(ZDL_DIR, recursive = TRUE, showWarnings = FALSE)
 for (key in names(zdl_rows)) {
   parts <- strsplit(key, "|", fixed = TRUE)[[1]]
   writeLines(c("MODEL\tZDL", "========", zdl_rows[[key]]),
-             file.path(ZDL_DIR, sprintf("%s_%s_ZDL.csv", parts[1], parts[2])))
+             file.path(ZDL_DIR, sprintf("%s_%s_ZDL_1981-2020.csv", parts[1], parts[2])))
+  writeLines(c("MODEL\tZDL", "========", zdl_rows_1991[[key]]),
+             file.path(ZDL_DIR, sprintf("%s_%s_ZDL_1991-2020.csv", parts[1], parts[2])))
 }
 
 cat("Done. Figures written to", PLOT_DIR, "\n")

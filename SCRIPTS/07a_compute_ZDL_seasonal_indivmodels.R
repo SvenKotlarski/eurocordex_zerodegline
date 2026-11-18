@@ -42,6 +42,39 @@ read_tas <- function(file) {
   x
 }
 
+# Compute seasonal mean temperature from the monthly EUR-12 fields, as in scripts 02 and 06a.
+read_climatology_1991_2020 <- function(results, tag, seasons, grid_dim) {
+  files <- Sys.glob(file.path(results, paste0(tag, "_tas_mon_*_EUR12.nc")))
+  if (length(files) != 1L) stop("Expected one monthly EUR-12 tas file for ", tag)
+  file <- files[1]
+  dates <- system2("cdo", c("-s", "showdate", shQuote(file)), stdout = TRUE)
+  if (!is.null(attr(dates, "status"))) stop("Cannot read time axis: ", file)
+  dates <- unlist(strsplit(trimws(paste(dates, collapse = " ")), "[[:space:]]+"))
+  if (!length(dates) || any(!grepl("^[0-9]{4}-[0-9]{2}-[0-9]{2}$", dates))) {
+    stop("Invalid time axis: ", file)
+  }
+  months <- substr(dates, 1, 7)
+  required <- c(sprintf("%d-12", 1990:2018),
+                sprintf("%d-01", 1991:2019), sprintf("%d-02", 1991:2019),
+                as.vector(outer(1991:2020, sprintf("%02d", 3:11), paste, sep = "-")))
+  if (any(vapply(required, function(month) sum(months == month) != 1L, logical(1)))) {
+    stop("Monthly input is missing or duplicates a required month: ", file)
+  }
+
+  lapply(seasons, function(season) {
+    start <- if (season == "DJF") "1990-12-01" else "1991-01-01"
+    end <- if (season == "DJF") "2019-03-01" else "2021-01-01"
+    tmp <- tempfile(fileext = ".nc")
+    on.exit(unlink(tmp))
+    status <- system2("cdo", c("-O", "-s", "-yseasmean", paste0("-selseas,", season),
+                               paste0("-seldate,", start, ",", end), shQuote(file), shQuote(tmp)))
+    if (status != 0L) stop("CDO seasonal mean failed for ", file, " ", season)
+    x <- read_tas(tmp)
+    if (!identical(dim(x), grid_dim)) stop("Grid dimension mismatch in ", file)
+    x
+  })
+}
+
 mask_nc <- nc_open(MASK_FILE)
 mask_names <- grep("^mask_", names(mask_nc$var), value = TRUE)
 masks <- setNames(lapply(mask_names, function(v) ncvar_get(mask_nc, v)), mask_names)
@@ -66,6 +99,7 @@ format_zdl <- function(z0, extrap) {
 
 # ZDL rows per region and season, key "region|season", written to RESULTS/ZDL after the loop
 zdl_rows <- list()
+zdl_rows_1991 <- list()
 record_zdl <- function(region, season, tag, z0, extrap = FALSE) {
   key <- paste(region, season, sep = "|")
   zdl_rows[[key]] <<- c(zdl_rows[[key]], paste0(tag, "\t", format_zdl(z0, extrap)))
@@ -81,11 +115,20 @@ for (m in read_models(MODELS_FILE)) {
     matrix(as.vector(x), nrow = nrow(orog), ncol = ncol(orog))
   })
   stopifnot(all(vapply(tas, function(x) all(dim(x) == dim(orog)), logical(1))))
+  tas_1991 <- read_climatology_1991_2020(RESULTS, tag, SEASONS, dim(orog))
 
   for (rg in mask_names) {
     region <- sub("^mask_", "", rg)
     label <- gsub("_", " ", region)
     base_ok <- which(masks[[rg]] == 1 & is.finite(orog) & is.finite(land) & land > LAND_MIN)
+
+    for (i in seq_along(SEASONS)) {
+      ok <- base_ok[is.finite(tas_1991[[i]][base_ok])]
+      fit <- if (length(ok) >= 3) fit_zdl(tas_1991[[i]][ok], orog[ok]) else NULL
+      value <- if (is.null(fit)) "NA" else format_zdl(fit$z0, fit$extrap)
+      key <- paste(region, SEASONS[i], sep = "|")
+      zdl_rows_1991[[key]] <- c(zdl_rows_1991[[key]], paste0(tag, "\t", value))
+    }
 
     fits <- lapply(seq_along(SEASONS), function(i) {
       ok <- base_ok[is.finite(tas[[i]][base_ok])]
@@ -142,7 +185,9 @@ dir.create(ZDL_DIR, recursive = TRUE, showWarnings = FALSE)
 for (key in names(zdl_rows)) {
   parts <- strsplit(key, "|", fixed = TRUE)[[1]]
   writeLines(c("MODEL\tZDL", "========", zdl_rows[[key]]),
-             file.path(ZDL_DIR, sprintf("%s_%s_ZDL.csv", parts[1], parts[2])))
+             file.path(ZDL_DIR, sprintf("%s_%s_ZDL_1981-2020.csv", parts[1], parts[2])))
+  writeLines(c("MODEL\tZDL", "========", zdl_rows_1991[[key]]),
+             file.path(ZDL_DIR, sprintf("%s_%s_ZDL_1991-2020.csv", parts[1], parts[2])))
 }
 
 cat("Done. Figures written to", PLOT_DIR, "\n")
