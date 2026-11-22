@@ -45,7 +45,8 @@ zdl_ylim <- function(model, eobs, cerra) {
   yl + c(-pad, pad)
 }
 
-plot_zdl_season <- function(season, model, eobs, cerra, yl, model_col, first, shade_below_zero = FALSE) {
+plot_zdl_season <- function(season, model, eobs, cerra, yl, model_col, first,
+                            shade_below_zero = FALSE) {
   par(mar = if (first) c(2, 6, 3, 0.5) else c(2, 0.5, 3, 0.5))
   plot(NA, xlim = c(-0.1, 1.08), xaxs = "i", ylim = yl, xaxt = "n", yaxt = if (first) "s" else "n",
        xlab = "", ylab = if (first) "ZDL (m)" else "", main = season)
@@ -53,8 +54,8 @@ plot_zdl_season <- function(season, model, eobs, cerra, yl, model_col, first, sh
     usr <- par("usr")
     if (usr[3] < 0) {
       rect(usr[1], usr[3], usr[2], min(0, usr[4]), col = "grey95", border = NA)
-      box()
     }
+    box()
   }
   abline(h = axTicks(2), col = "grey75", lty = 2)
   if (!is.null(model)) {

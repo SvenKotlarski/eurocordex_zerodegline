@@ -91,6 +91,8 @@ Steps:
 4. Every tas file is remapped (`cdo remapbil`) onto the EUR-12 grid, giving `<name>_EUR12.nc`. E-OBS covers land only and a smaller domain than EUR-12, so about 63–65% of the EUR-12 cells are missing.
 5. The E-OBS elevation (`elevation`, m) is renamed to `orog` and remapped onto EUR-12 as `RESULTS/OROG/EOBS_v31.0e_orog_EUR12.nc`.
 
+The highest land E-OBS cell per EEA mountain region is taken on the EUR-12 grid, matching the model grid: the bilinearly remapped E-OBS orography (`RESULTS/OROG/EOBS_v31.0e_orog_EUR12.nc`), restricted to cells in the region mask `RESULTS/EEA_mountain_masks_EUR12.nc` (script 04, >50% of cell area in the region) with finite orography. The result is written to `RESULTS/OROG/EOBS_maxperregion.csv` (columns `region, max_elevation_m, lon, lat`, where lon/lat are the EUR-12 cell centre). Because the remapping smooths peaks and the mask drops border cells, these maxima are 79–362 m lower than the native 0.1° maxima.
+
 Output: temperature files `RESULTS/EOBS_v31.0e_*.nc` (native grid) and `RESULTS/EOBS_v31.0e_*_EUR12.nc` (EUR-12 grid), and EUR-12 orography in `RESULTS/OROG/`. E-OBS has no land-sea mask. The script cleans up only its own temporary files.
 
 ### `SCRIPTS/06b_prepare_CERRA.sh`
@@ -222,4 +224,4 @@ Plots the 1991–2020 model, E-OBS and CERRA climatology tables used by script 0
 Rscript SCRIPTS/11_plot_ZDL_perregion__twosets_1991-2020_fullensemble_eobs_cerra.R
 ```
 
-Outputs are `PLOTS/ZDL_OVERVIEW/ZDL_overview_twosets_set1_1991-2020.png` and `ZDL_overview_twosets_set2_1991-2020.png`. Each figure has six regions in two columns and three rows, with four seasonal subpanels per region and a shared legend. Set 1 contains Alps, Carpathians, Iberian mountains, Pyrenees, Scandes and Balkans; set 2 contains the remaining six regions in alphabetical order. Each region has its own common seasonal height scale, with elevations below 0 m shaded light grey. Line colours, reference stars and extrapolation styles follow script 08. All four seasons and all three datasets must be present for all 12 regions.
+Outputs are `PLOTS/ZDL_OVERVIEW/ZDL_overview_twosets_set1_1991-2020.png` and `ZDL_overview_twosets_set2_1991-2020.png`. Each figure has six regions in two columns and three rows, with four seasonal subpanels per region and a shared legend. Set 1 contains Alps, Carpathians, Iberian mountains, Pyrenees, Scandes and Balkans; set 2 contains the remaining six regions in alphabetical order. Each region has its own common seasonal height scale. Elevations below 0 m are shaded light grey (`grey95`); the rest of the panel is unshaded. Line colours, reference stars and extrapolation styles follow script 08. All four seasons and all three datasets must be present for all 12 regions.

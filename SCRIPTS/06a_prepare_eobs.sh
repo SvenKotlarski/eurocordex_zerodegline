@@ -4,7 +4,8 @@
 #  - seasonal series for the full period and for 1981-2020, and multi-year seasonal means (1981-2020),
 #    with the same season windows and names as script 02
 #  - all tas files and the E-OBS elevation (elevation) remapped onto the common EUR-12 grid (424 x 412)
-# Temperature outputs go to RESULTS; EUR-12 orography goes to RESULTS/OROG.
+#  - per EEA mountain region, the highest land E-OBS grid cell on the EUR-12 grid (region mask, finite orography)
+# Temperature outputs go to RESULTS; EUR-12 orography and the per-region maxima go to RESULTS/OROG.
 
 set -euo pipefail
 
@@ -15,6 +16,9 @@ OROG_DIR="$RESULTS/OROG"
 EOBS_DIR="/mnt/CORDEX_CMIP6_tmp/aux_data/eobs"
 TG="$EOBS_DIR/tg_ens_mean_0.1deg_reg_v31.0e.nc"
 ELEV="$EOBS_DIR/elev_ens_0.1deg_reg_v31.0e.nc"
+REGIONS="$WORKDIR/DATA/EEA_MOUNTAINS/eea_mountains_final_lonlat.gpkg"
+MAXELEV_CSV="$OROG_DIR/EOBS_maxperregion.csv"
+MASKS_EUR12="$RESULTS/EEA_mountain_masks_EUR12.nc"
 TAG="EOBS_v31.0e"
 REF="$RESULTS/KNMI_RACMO23E_tas_mon_1980-2020.nc"   # exact EUR-12 grid (424 x 412)
 
@@ -131,4 +135,39 @@ for src in srcs:
           f"{os.path.basename(out_path)}", flush=True)
 PY
 
-echo "Done. E-OBS files written to $RESULTS"
+# Highest land E-OBS cell per region on the rotated EUR-12 grid: cells in the region mask (>50% area)
+# with finite orography (E-OBS orography is NaN over sea).
+orog_eur12="$OROG_DIR/$(basename "$orog_raw" .nc)_EUR12.nc"
+python3 - "$orog_eur12" "$MASKS_EUR12" "$MAXELEV_CSV" <<'PY'
+import sys
+
+import numpy as np
+import pandas as pd
+import xarray as xr
+
+orog_path, masks_path, out_csv = sys.argv[1:4]
+
+with xr.open_dataset(orog_path) as ds:
+    z = ds["orog"].values.astype(float)
+    lon = ds["lon"].values
+    lat = ds["lat"].values
+
+with xr.open_dataset(masks_path) as ds:
+    masks = {v[len("mask_"):]: ds[v].values.astype(bool) for v in ds.data_vars if v.startswith("mask_")}
+
+rows = []
+for key, mask in masks.items():
+    flat = np.flatnonzero((mask & np.isfinite(z)).ravel())
+    if flat.size == 0:
+        raise RuntimeError(f"no land EUR-12 cells in region {key}")
+    iy, ix = np.unravel_index(flat[np.argmax(z.ravel()[flat])], z.shape)
+    rows.append({"region": key.replace("_", " "), "max_elevation_m": round(float(z[iy, ix]), 1),
+                 "lon": round(float(lon[iy, ix]), 2), "lat": round(float(lat[iy, ix]), 2)})
+
+out = pd.DataFrame(rows)
+out.to_csv(out_csv, index=False)
+print(out.to_string(index=False), flush=True)
+print(f"written: {out_csv}", flush=True)
+PY
+
+echo "Done. E-OBS files written to $RESULTS; per-region maxima to $MAXELEV_CSV"

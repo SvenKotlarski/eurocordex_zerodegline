@@ -1,6 +1,7 @@
 #!/usr/bin/env Rscript
 # Two six-region overviews of 1991-2020 ZDL climatologies (DJF 1991-2019).
 # Each region has four seasonal subpanels, using the same styles as script 08.
+# Panels shade elevations below 0 m (darker grey) and elevations above the region's highest E-OBS cell (lightest grey).
 # Run with: Rscript SCRIPTS/11_plot_ZDL_perregion__twosets_1991-2020_fullensemble_eobs_cerra.R
 
 ROOT <- "/mnt/CORDEX_CMIP6_tmp/user_tmp/skotlarski/eurocordex_zerodegline"
@@ -64,7 +65,8 @@ plot_set <- function(regions, number) {
       for (i in seq_along(SEASONS)) {
         s <- SEASONS[i]
         plot_zdl_season(s, zdl[[region]][[s]], eobs[[region]][[s]],
-                        cerra[[region]][[s]], yl, model_col, i == 1, shade_below_zero = TRUE)
+                        cerra[[region]][[s]], yl, model_col, i == 1,
+                        shade_below_zero = TRUE)
       }
     }
   }
